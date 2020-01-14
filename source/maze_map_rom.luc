@@ -1,0 +1,38 @@
+module maze_map_rom (
+    input address[4],  // ROM address 
+    input clk,  // clock
+    input rst,  // reset
+    output map[8]  // ROM output 
+  ) {
+   // const TEXT = "\r\n\!dlow olleH";  // text is reversed to make "'h' address [0]  
+    const ROW_1 = 8b10000000;
+    const ROW_2 = 8b11110000;
+    const ROW_3 = 8b00010111;
+    const ROW_4 = 8b11111100;
+    const ROW_5 = 8b00010000;
+    const ROW_6 = 8b11111100;
+    const ROW_7 = 8b01110111;
+    const ROW_8 = 8b01000101;
+  always {
+    if (address == b0000){
+    map = ROW_1;
+      }else if (address == b0001){
+    map = ROW_2;
+      }else if(address == b0010){
+    map = ROW_3;
+      }else if(address == b0011){
+    map = ROW_4;
+      }else if (address == b0100){
+    map = ROW_5;
+      }else if(address == b0101){
+    map = ROW_6;
+      }else if(address == b0110){
+    map = ROW_7;
+      }else if(address == b0111){
+    map = ROW_8;
+      } else{
+    map = 0;
+      }
+    //map = ROW_7;
+  }
+}

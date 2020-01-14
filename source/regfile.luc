@@ -1,0 +1,90 @@
+module regfile (
+    input clk,  // clock
+    input rst,  // reset
+    input write_addres [5],   // the write write_addres
+    input write_addres_1[5],    // create another write_address 
+    input we,    // write enable
+    input we_1,  // create another wright enable 
+    input data[16],  // data in 
+    input read_address_a[5],    // address port a 
+    input read_address_b[5],    // address port b 
+    input read_address_c[5],    // address port c
+    output xlocation[3],
+    //input debug_fsm[4],
+    //output ylocation_debug[3],
+    //output ylocation_debug_1[3],
+    output ylocation[3],
+    output templocation_1[3],
+    output templocation_2[3],
+    output out_a[16],           // read port a 
+    output out_b[16],           // read port b 
+    output out_c[16]            // read port c
+  ) {
+  .clk(clk){
+    .rst(rst){
+      dff x_loc[3];
+      dff y_loc[3];
+      dff temp_1[3];
+      dff temp_2[3];
+      }
+    }
+  always {
+    // wriet port 
+    if(we){
+      case(write_addres){
+        b00000 : x_loc.d = data;      // take the data as input 
+        b00001 : y_loc.d = data;      // take the data as the input 
+        b00010 : temp_1.d = data;
+        }
+    }    
+
+      // read port a 
+      case(read_address_a){
+        b00000 : out_a = x_loc.q;    // q means out put 
+        b00001 : out_a = y_loc.q;
+        b00010 : out_a = temp_1.q;
+        default : out_a = 0;
+        }
+      case(read_address_b){
+        b00000 : out_b = x_loc.q;
+        b00001 : out_b = y_loc.q;
+        b00010 : out_b = temp_1.q;
+        default : out_b = 0;
+        }
+      case(read_address_c){
+        b00000 : out_c = x_loc.q;
+        b00001 : out_c = y_loc.q;
+        b00010 : out_c = temp_1.q;
+        default : out_c = 0;
+        }      
+       
+    if(we_1){
+      case(write_addres_1){
+        b00011 : temp_2.d = data;
+        }
+    }     
+    /* 
+      // read port a 
+      case(read_address_a){
+        b00011 : out_a = temp_2.q;
+        default : out_a = 0;
+        }
+      case(read_address_b){
+        b00011 : out_b = temp_2.q;
+        default : out_b = 0;
+        }
+      case(read_address_c){
+        b00011 : out_c = temp_2.q;
+        default : out_c = 0;
+        }     
+    */ 
+       
+    //ylocation_debug=b101;
+    //ylocation_debug_1 = b111;
+   // debug_fsm = b1111;  // set the debug fsm always be 1111
+    xlocation = x_loc.q;
+    ylocation = y_loc.q;
+    templocation_1 = temp_1.q;
+    templocation_2 = temp_2.q;
+  }
+}

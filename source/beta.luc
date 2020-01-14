@@ -1,0 +1,99 @@
+module beta (
+    input clk,  // clock
+    input rst,  // reset 
+    input up_button,
+    input down_button,
+    input left_button,
+    input right_button,
+    input hint_button,
+    output win_sig,
+    output lose_sig,
+    output xloc_out[3],
+    //output debug_fsm[4],
+    //output debug_fsmstate[8],
+    output yloc_out[3],
+    output decctr_decrease
+  ) {
+  sig inputAlu_a[16];
+  sig inputAlu_b[16];
+  alu16bit game_alu;
+  
+  .clk(clk){
+        edge_detector edge_detector (#RISE(1), #FALL(0));
+  // need someting, check with prof
+    .rst(rst){
+      counter ctr (#SIZE(1), #DIV(25));
+      fsm_controller game_controlunit;
+
+      maze_map_rom rom;
+      regfile reg;
+      }
+    }
+  always {
+    edge_detector.in = ctr.value;
+    game_controlunit.timer_decrease = edge_detector.out;
+    decctr_decrease = game_controlunit.decctr_decrease;
+    
+    // win and lose 
+    win_sig = game_controlunit.win_signal;
+    lose_sig = game_controlunit.lose_signal;
+    
+    game_controlunit.dificulity_level = 0;
+    game_controlunit.decrease_timer = 0;
+    // pass button press signal to fsm_controller
+    game_controlunit.up = up_button;
+    game_controlunit.down = down_button;
+    game_controlunit.left = left_button;
+    game_controlunit.right = right_button;
+    game_controlunit.hint = hint_button;
+    
+    // set up regfile unit 
+    reg.we = game_controlunit.we_regfile;
+    reg.we_1 = game_controlunit.we_regfile_1;
+    reg.write_addres = game_controlunit.regfile_write_address;
+    reg.write_addres_1 = game_controlunit.regfile_write_address_1;
+    reg.read_address_a = game_controlunit.regfile_read_address_a;
+    reg.read_address_b = game_controlunit.regfile_read_address_b;
+    reg.read_address_c = game_controlunit.regfile_read_address_c;
+    game_controlunit.x_location = reg.xlocation;
+    game_controlunit.y_location = reg.ylocation;
+    game_controlunit.temp_location_1 = reg.templocation_1;
+    game_controlunit.temp_location_2 = reg.templocation_2;
+    //reg.debug_fsm = game_controlunit.debug;     // set the debug_fsm
+    //debug_fsm = game_controlunit.debug;
+    //debug_fsmstate = game_controlunit.debug_state;
+    rom.address = game_controlunit.rom_address;
+    game_controlunit.rom_data = rom.map;
+    
+    
+    // xsel mux
+    case(game_controlunit.xsel){
+      b00 : inputAlu_a = reg.out_a;     // read data from the regfile 
+      b01 : inputAlu_a = 60;            // the 60 for timer
+      b10 : inputAlu_a = game_controlunit.direct_data;
+      default: inputAlu_a = 0;          // the unused b11 b10
+      }
+    // ysel mux
+    case(game_controlunit.ysel){
+      b00 : inputAlu_b = reg.out_b;
+      b01 : inputAlu_b = 1;
+      b10 : inputAlu_b = 0;
+      default : inputAlu_b = 0;
+      }
+    //alu 
+    game_alu.a = inputAlu_a;
+    game_alu.b = inputAlu_b;
+    game_alu.alufn = game_controlunit.alufn;
+    
+    // wdsel mux
+    case(game_controlunit.wdsel){
+      b01 : reg.data = b0000000000000000;     // 0
+      b10 : reg.data = b1111111111111111;    // win 
+      b00 : reg.data = game_alu.out;
+      default : reg.data = game_alu.out;
+      }
+    xloc_out = reg.xlocation;
+    yloc_out = reg.ylocation;
+
+  }
+}

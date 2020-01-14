@@ -1,0 +1,487 @@
+module mojo_top (
+    input clk,              // 50MHz clock
+    input rst_n,            // reset button (active low)
+    output led [8],         // 8 user controllable LEDs
+    input cclk,             // configuration clock, AVR ready when high
+    output spi_miso,        // AVR SPI MISO
+    input spi_ss,           // AVR SPI Slave Select
+    input spi_mosi,         // AVR SPI MOSI
+    input spi_sck,          // AVR SPI Clock
+    output spi_channel [4], // AVR general purpose pins (used by default to select ADC channel)
+    input avr_tx,           // AVR TX (FPGA RX)
+    output avr_rx,          // AVR RX (FPGA TX)
+    input avr_rx_busy,      // AVR RX buffer full
+    output io_led [3][8],   // LEDs on IO Shield
+    //output location_debug,  // debug of location
+    output io_seg [8],      // 7-segment LEDs on IO Shield
+    output io_sel [4],      // Digit select on IO Shield
+    input io_button [5],    // 5 buttons on IO Shield
+    input io_dip [3][8],     // DIP switches on IO Shield
+    input usb_rx,           // USB- serial input
+    //output usb_tx             // USB serial output 
+    output row[8],              //8 x8 LED row selector
+    output red[8],              // 8 x8 LED red selector (WALLS)
+    output green[8]     
+    
+    
+  ) {
+  // this is the correct one 
+  
+  sig rst;                  // reset signal
+  
+  .clk(clk) {
+    // The reset conditioner is used to synchronize the reset signal to the FPGA
+    // clock. This ensures the entire FPGA comes out of reset at the same time.
+    reset_conditioner reset_cond;
+    fsm state(.rst(rst)) = {A, B, C, D, E, F, G, H,I,J,K,L,M,N,O,P};   
+    
+    //edge_detector edge_detector (#RISE(1), #FALL(0));
+    
+    .rst(rst) {
+      multi_seven_seg seg;
+      multi_dec_ctr dec_ctr;
+      beta game_machine;
+      counter ctr (#SIZE(1), #DIV(25));
+      dff counter[20];
+      //uart_rx rx (#BAUD(1000000),#CLK_FREQ(100000000));
+      //uart_tx tx (#BAUD(1000000),#CLK_FREQ(100000000));
+    }
+
+      edge_detector edge_dt_btn_up(#RISE(1),#FALL(0));
+      buttoncon btn_con_up;
+      edge_detector edge_dt_btn_down(#RISE(1),#FALL(0));
+      buttoncon btn_con_down;
+      edge_detector edge_dt_btn_left(#RISE(1),#FALL(0));
+      buttoncon btn_con_left;
+      edge_detector edge_dt_btn_right(#RISE(1),#FALL(0));
+      buttoncon btn_con_right;
+      edge_detector edge_dt_btn_hint(#RISE(1),#FALL(0));
+      buttoncon btn_con_hint;
+  }
+  maze_map_rom rom;
+  regfile reg;
+//  fsm_controller game_fsm;
+  always {
+    io_led = io_dip;   // connect the DIP switches to the LEDs 
+    btn_con_up.in = io_button[0];
+    edge_dt_btn_up.in = btn_con_up.out;
+    game_machine.up_button = edge_dt_btn_up.out;
+    btn_con_down.in = io_button[2];
+    edge_dt_btn_down.in = btn_con_down.out;
+    game_machine.down_button = edge_dt_btn_down.out;
+    btn_con_left.in = io_button[3];
+    edge_dt_btn_left.in = btn_con_left.out;
+    game_machine.left_button = edge_dt_btn_left.out;
+    btn_con_right.in = io_button[4];
+    edge_dt_btn_right.in = btn_con_right.out;
+    game_machine.right_button = edge_dt_btn_right.out;
+    btn_con_hint.in = io_button[1];
+    edge_dt_btn_hint.in = btn_con_hint.out;
+    game_machine.hint_button = edge_dt_btn_hint.out;            
+    reset_cond.in = ~rst_n;   // input raw inverted reset signal
+    rst = reset_cond.out;     // conditioned reset
+    //reg.debug_fsm = b1111;
+    reg.read_address_b= 0;
+    reg.read_address_a=0;
+    reg.read_address_c=0;
+    reg.rst = rst;
+    reg.we = 0;
+    reg.we_1=0;
+    reg.data=0;
+    reg.write_addres=0;
+    reg.write_addres_1=0;
+    reg.clk = clk;
+    led = c{3b0, io_button};  // connect buttons to LEDs
+    spi_miso = bz;            // not using SPI
+    spi_channel = bzzzz;      // not using flags
+    avr_rx = bz;              // not using serial port
+  
+    dec_ctr.dnc = game_machine.decctr_decrease;
+    seg.values = dec_ctr.digits;
+    if(io_button[1]){
+      io_led[2] = rom.map;
+      }else{
+      io_led[2][2:0] = game_machine.yloc_out;
+      //io_led[2][7:3]=game_machine.debug_fsm;   // set the debug led
+      io_led[2][7:3]=0; 
+      //led = game_machine.debug_fsmstate;
+      }
+
+    //location_debug = reg.ylocation_debug;   // check the button pressed
+    //if(io_button[1]){
+      //io_led[2] = reg.ylocation_debug_1;
+      //}else{
+        //io_led[2] =reg.ylocation_debug;
+     //}
+    rom.address = io_dip[1];
+    rom.clk = clk;
+    rom.rst = rst;
+    //io_led[2] = game_machine.yloc_out;
+    io_led[1][2:0] = game_machine.xloc_out;
+    io_led[1][7:3] = 0;    // ground the other 5 leds 
+    io_led[0] = rom.map;
+
+    io_seg = ~seg.seg; // connect segments to the driver
+    io_sel = ~seg.sel; // connect digit select to the driver
+    
+    counter.d = counter.q + 1;
+    
+    row = 8x{0};
+    red = 8x{1}; 
+    green = 8x{1};
+    
+    case(state.q){
+      state.A:
+       rom.address= b0000;
+        
+        row[0] = 1;
+        red = rom.map;
+        
+        
+        if(counter.q[15] == 1){
+          counter.d = 0;
+          state.d = state.B;
+        }
+      state.B:
+      rom.address= b0001;
+        row[1] = 1;
+        red = rom.map;
+        
+        if(counter.q[15] == 1){
+          counter.d = 0;
+          state.d = state.C;
+        }
+      state.C:
+      rom.address= b0010;
+        row[2] = 1;
+        red = rom.map;
+        
+        if(counter.q[15] == 1){
+          counter.d = 0;
+          state.d = state.D;
+        }
+      state.D:
+      rom.address= b0011;
+        row[3] = 1;
+        red = rom.map;
+        
+        
+        if(counter.q[15] == 1){
+          counter.d = 0;
+          state.d = state.E;
+        }
+      state.E:
+      rom.address= b0100;
+        row[4] = 1;
+        red = rom.map;
+        
+        if(counter.q[15] == 1){
+          counter.d = 0;
+          state.d = state.F;
+        }
+      state.F:
+      rom.address= b0101;
+        row[5] = 1;
+        red = rom.map;
+        
+        if(counter.q[15] == 1){
+          counter.d = 0;
+          state.d = state.G;
+        }
+      state.G:
+      rom.address= b0110;
+        row[6] = 1;
+        red = rom.map;
+        
+        if(counter.q[15] == 1){
+          counter.d = 0;
+          state.d = state.H;
+        }
+      state.H:
+      rom.address= b0111;
+        row[7] = 1;
+        red = rom.map;
+        
+        
+        if(counter.q[15] == 1){
+          counter.d = 0;
+          state.d = state.I;
+        } 
+ state.I: //start player position 
+      row[0] = 1;
+
+      if(game_machine.yloc_out==3b000){
+        if(game_machine.xloc_out==3b000){
+          green = 8b01111111;
+          }
+        if(game_machine.xloc_out==3b001){
+          green = 8b10111111;
+          }
+        if(game_machine.xloc_out==3b010){
+          green = 8b11011111;
+          }
+        if(game_machine.xloc_out==3b011){
+          green = 8b11101111;
+          }
+        if(game_machine.xloc_out==3b100){
+          green = 8b11110111;
+          }
+        if(game_machine.xloc_out==3b101){
+          green = 8b11111011;
+          }
+        if(game_machine.xloc_out==3b110){
+          green = 8b11111101;
+          }
+        if(game_machine.xloc_out==3b111){
+          green = 8b11111110;
+          }
+          }
+        if(counter.q[15] == 1){
+          counter.d = 0;
+          state.d = state.J;
+        }
+        
+      state.J:
+        row[1] = 1;
+            if(game_machine.yloc_out==3b001){
+        if(game_machine.xloc_out==3b000){
+          green = 8b01111111;
+          }
+        if(game_machine.xloc_out==3b001){
+          green = 8b10111111;
+          }
+        if(game_machine.xloc_out==3b010){
+          green = 8b11011111;
+          }
+        if(game_machine.xloc_out==3b011){
+          green = 8b11101111;
+          }
+        if(game_machine.xloc_out==3b100){
+          green = 8b11110111;
+          }
+        if(game_machine.xloc_out==3b101){
+          green = 8b11111011;
+          }
+        if(game_machine.xloc_out==3b110){
+          green = 8b11111101;
+          }
+        if(game_machine.xloc_out==3b111){
+          green = 8b11111110;
+          }
+          }
+        
+        if(counter.q[15] == 1){
+          counter.d = 0;
+          state.d = state.K;
+        }
+      state.K:
+
+        row[2] = 1;
+              if(game_machine.yloc_out==3b010){
+        if(game_machine.xloc_out==3b000){
+          green = 8b01111111;
+          }
+        if(game_machine.xloc_out==3b001){
+          green = 8b10111111;
+          }
+        if(game_machine.xloc_out==3b010){
+          green = 8b11011111;
+          }
+        if(game_machine.xloc_out==3b011){
+          green = 8b11101111;
+          }
+        if(game_machine.xloc_out==3b100){
+          green = 8b11110111;
+          }
+        if(game_machine.xloc_out==3b101){
+          green = 8b11111011;
+          }
+        if(game_machine.xloc_out==3b110){
+          green = 8b11111101;
+          }
+        if(game_machine.xloc_out==3b111){
+          green = 8b11111110;
+          }
+          }
+        
+        if(counter.q[15] == 1){
+          counter.d = 0;
+          state.d = state.L;
+        }
+      state.L:
+
+        row[3] = 1;
+              if(game_machine.yloc_out==3b011){
+        if(game_machine.xloc_out==3b000){
+          green = 8b01111111;
+          }
+        if(game_machine.xloc_out==3b001){
+          green = 8b10111111;
+          }
+        if(game_machine.xloc_out==3b010){
+          green = 8b11011111;
+          }
+        if(game_machine.xloc_out==3b011){
+          green = 8b11101111;
+          }
+        if(game_machine.xloc_out==3b100){
+          green = 8b11110111;
+          }
+        if(game_machine.xloc_out==3b101){
+          green = 8b11111011;
+          }
+        if(game_machine.xloc_out==3b110){
+          green = 8b11111101;
+          }
+        if(game_machine.xloc_out==3b111){
+          green = 8b11111110;
+          }
+          }
+        
+        
+        if(counter.q[15] == 1){
+          counter.d = 0;
+          state.d = state.M;
+        }
+      state.M:
+
+        row[4] = 1;
+              if(game_machine.yloc_out==3b100){
+        if(game_machine.xloc_out==3b000){
+          green = 8b01111111;
+          }
+        if(game_machine.xloc_out==3b001){
+          green = 8b10111111;
+          }
+        if(game_machine.xloc_out==3b010){
+          green = 8b11011111;
+          }
+        if(game_machine.xloc_out==3b011){
+          green = 8b11101111;
+          }
+        if(game_machine.xloc_out==3b100){
+          green = 8b11110111;
+          }
+        if(game_machine.xloc_out==3b101){
+          green = 8b11111011;
+          }
+        if(game_machine.xloc_out==3b110){
+          green = 8b11111101;
+          }
+        if(game_machine.xloc_out==3b111){
+          green = 8b11111110;
+          }
+          }
+        
+        if(counter.q[15] == 1){
+          counter.d = 0;
+          state.d = state.N;
+        }
+      state.N:
+
+        row[5] = 1;
+              if(game_machine.yloc_out==3b101){
+        if(game_machine.xloc_out==3b000){
+          green = 8b01111111;
+          }
+        if(game_machine.xloc_out==3b001){
+          green = 8b10111111;
+          }
+        if(game_machine.xloc_out==3b010){
+          green = 8b11011111;
+          }
+        if(game_machine.xloc_out==3b011){
+          green = 8b11101111;
+          }
+        if(game_machine.xloc_out==3b100){
+          green = 8b11110111;
+          }
+        if(game_machine.xloc_out==3b101){
+          green = 8b11111011;
+          }
+        if(game_machine.xloc_out==3b110){
+          green = 8b11111101;
+          }
+        if(game_machine.xloc_out==3b111){
+          green = 8b11111110;
+          }
+          }
+        
+        if(counter.q[15] == 1){
+          counter.d = 0;
+          state.d = state.O;
+        }
+      state.O:
+
+        row[6] = 1;
+              if(game_machine.yloc_out==3b110){
+        if(game_machine.xloc_out==3b000){
+          green = 8b01111111;
+          }
+        if(game_machine.xloc_out==3b001){
+          green = 8b10111111;
+          }
+        if(game_machine.xloc_out==3b010){
+          green = 8b11011111;
+          }
+        if(game_machine.xloc_out==3b011){
+          green = 8b11101111;
+          }
+        if(game_machine.xloc_out==3b100){
+          green = 8b11110111;
+          }
+        if(game_machine.xloc_out==3b101){
+          green = 8b11111011;
+          }
+        if(game_machine.xloc_out==3b110){
+          green = 8b11111101;
+          }
+        if(game_machine.xloc_out==3b111){
+          green = 8b11111110;
+          }
+          }
+        
+        if(counter.q[15] == 1){
+          counter.d = 0;
+          state.d = state.P;
+        }
+      state.P:
+
+        row[7] = 1;
+              if(game_machine.yloc_out==3b111){
+        if(game_machine.xloc_out==3b000){
+          green = 8b01111111;
+          }
+        if(game_machine.xloc_out==3b001){
+          green = 8b10111111;
+          }
+        if(game_machine.xloc_out==3b010){
+          green = 8b11011111;
+          }
+        if(game_machine.xloc_out==3b011){
+          green = 8b11101111;
+          }
+        if(game_machine.xloc_out==3b100){
+          green = 8b11110111;
+          }
+        if(game_machine.xloc_out==3b101){
+          green = 8b11111011;
+          }
+        if(game_machine.xloc_out==3b110){
+          green = 8b11111101;
+          }
+        if(game_machine.xloc_out==3b111){
+          green = 8b11111110;
+          }
+          }
+        
+        
+        if(counter.q[15] == 1){
+          counter.d = 0;
+          state.d = state.A;
+        }
+  } 
+           
+           
+  }    
+}

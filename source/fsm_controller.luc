@@ -1,0 +1,344 @@
+module fsm_controller (
+    input clk,  // clock
+    input rst,  // reset
+    input decrease_timer,
+    input up,
+    input down,
+    input left,
+    input right,
+    input hint,
+    input rom_data[8],
+    input x_location[3],
+    input y_location[3],
+    input temp_location_1[3],
+    input temp_location_2[3],
+    input timer_decrease,
+    //input regfile_datain[16],
+    input dificulity_level,
+    output alufn[6],
+    output  xsel[3],
+    output ysel[3],
+    output we_regfile,  // first write enable
+    output we_regfile_1, // second write enable
+    output regfile_write_address[5],
+    output regfile_write_address_1[5],
+    output regfile_read_address_a[5],
+    output regfile_read_address_b[5],
+    output regfile_read_address_c[5],   // create another write port call write port c
+    output wdsel[2],
+    output rom_address[4],
+    //output debug[4],
+    output win_signal,
+    output lose_signal,
+    //output debug_state[8],
+    output direct_data[16],
+    output decctr_decrease
+  ) {
+  
+  sig new_x;
+  sig new_y;
+  sig check_wall;
+  sig win;
+  sig lose;
+  
+  .clk(clk){
+    fsm maze_fsm={START_TIMER, START_SETX, START_SETY, IDLE, CHECK_GAME_TIMER,UPDATE,CHECKMOVEMENT_UP,CHECKMOVEMENT_DOWN,CHECKMOVEMENT_LEFT,CHECKMOVEMENT_RIGHT, CHECKMOVEMENT_UP_WALL,CHECKMOVEMENT_DOWN_WALL,CHECKMOVEMENT_LEFT_WALL,
+    CHECKMOVEMENT_RIGHT_WALL, WIN,LOSE};
+  //  dff x_loc[3]; // store the current location x 
+  //  dff y_loc[3]; // store the current location y 
+    .rst(rst){
+        //dff debug_reg[8];
+        dff timer_reg[8];
+    }
+    }
+  always {
+    win_signal = 0;
+    lose_signal = 0;
+    //debug_state = debug_reg.q ;
+    alufn = 0;
+    xsel= 0;
+    ysel = 0;
+    we_regfile = 0;
+    we_regfile_1 = 0;
+    regfile_write_address = 11111;
+    regfile_write_address_1 = 11111;
+    regfile_read_address_a = 00000;
+    regfile_read_address_b = 00000;
+    regfile_read_address_c = 00000;
+    wdsel = 00;
+    rom_address = 0;
+    direct_data = 0;
+    //debug = b0000;
+    decctr_decrease = 0;
+    
+   
+    
+    if(rst){
+      maze_fsm.d = maze_fsm.START_TIMER;
+      //debug = b1111;
+
+    
+      }else{
+        case(maze_fsm.q){
+      
+        maze_fsm.START_TIMER:
+          timer_reg.d = b1100100;
+          maze_fsm.d = maze_fsm.START_SETX;
+          
+        maze_fsm.START_SETX:
+          alufn = b000000;     // not using ALU, set to 0
+          xsel = b000;         // not using ALU
+          ysel = b000;         // not using ALU
+          
+          regfile_write_address = b00000; // write to x_loc reg 
+          we_regfile = 1; // to write
+          
+          wdsel = b01; // constant zero 
+          //debug = b1110;
+          maze_fsm.d = maze_fsm.START_SETY;
+          //maze_fsm.d = maze_fsm.START_SETX;  // for debug 
+          
+        maze_fsm.START_SETY:
+          alufn = b000000;     // not using ALU, set to 0
+          xsel = b000;         // not using ALU
+          ysel = b000;         // not using ALU
+          
+          regfile_write_address = b00001; // write to y_loc reg 
+          we_regfile = 1; // to write
+          
+          wdsel = b01; // constant zero 
+          //debug = b1100;
+          maze_fsm.d = maze_fsm.IDLE;
+          //maze_fsm.d = maze_fsm.START_SETX; // for debug
+          
+        maze_fsm.CHECKMOVEMENT_UP:
+          alufn = b000001; // SUB 
+          xsel = b00000; // from a-port of regfile 
+          ysel = b00001; // constant one 
+          
+          regfile_read_address_a = b00001; // get data from y_location;
+          regfile_write_address = b00010; // the temp register, containing new y 
+          we_regfile = 1;
+          
+          wdsel = b00; 
+          //debug = b1000;
+          maze_fsm.d = maze_fsm.CHECKMOVEMENT_UP_WALL;
+          //maze_fsm.d = maze_fsm.CHECKMOVEMENT_UP;
+          
+        maze_fsm.CHECKMOVEMENT_UP_WALL:
+          if (temp_location_1 > 0){
+              rom_address = temp_location_1;   // which row where are we
+              check_wall = rom_data[7-x_location]; // which cell ?
+              if (check_wall == 1){ //no wall, update location 
+                  //update the ylocation 
+                  alufn = b011010; //A 
+                  regfile_write_address = b00001; // to y_loc 
+                  we_regfile = 1;
+                  xsel = b10;
+                  wdsel = b00;
+                  direct_data = temp_location_1; //the new y 
+                  //debug = b0110;
+                  maze_fsm.d = maze_fsm.IDLE;
+                  //maze_fsm.d = maze_fsm.CHECKMOVEMENT_UP_WALL;   // for debug   
+                }
+            
+              else{ //theres wall 
+            
+              //stays the same 
+               maze_fsm.d = maze_fsm.IDLE;
+               //maze_fsm.d = maze_fsm.CHECKMOVEMENT_UP_WALL;   // for debug
+              //debug = b1110;
+            }
+          }
+            else {
+            //out of bounds 
+            maze_fsm.d = maze_fsm.IDLE;
+            //maze_fsm.d = maze_fsm.CHECKMOVEMENT_UP_WALL;     // for debug
+            //debug = b0001;
+            } 
+        maze_fsm.CHECKMOVEMENT_DOWN:
+          alufn = b000000; // ADD
+          xsel = b00000; // from a-port of regfile 
+          ysel = b00001; // constant one 
+          
+          regfile_read_address_a = b00001; // get data from y_location;
+          regfile_write_address = b00010; // the temp register, containing new y 
+          we_regfile = 1;
+          
+          wdsel = b00; 
+          //debug = b1001;
+          maze_fsm.d = maze_fsm.CHECKMOVEMENT_DOWN_WALL;
+          //maze_fsm.d = maze_fsm.CHECKMOVEMENT_DOWN;     //  for debug 
+        maze_fsm.CHECKMOVEMENT_DOWN_WALL:
+          if (temp_location_1 > 0){
+              rom_address = temp_location_1;   // which row where are we
+              check_wall = rom_data[7-x_location]; // which cell ?
+             // debug_reg.d = check_wall;
+              if (check_wall){ //no wall, update location 
+                  //update the ylocation 
+                  alufn = b011010; //A 
+                  regfile_write_address = b00001; // to y_loc 
+                  we_regfile = 1;
+                  xsel = b10;
+                  wdsel = b00;
+                  direct_data = temp_location_1; //the new y 
+                  maze_fsm.d = maze_fsm.IDLE;
+                 // maze_fsm.d = maze_fsm.CHECKMOVEMENT_DOWN_WALL;  // for debug 
+                 // debug_reg.d = b0011;
+                }
+            
+              else{ //theres wall 
+            
+              //stays the same 
+               maze_fsm.d = maze_fsm.IDLE;
+              // maze_fsm.d = maze_fsm.CHECKMOVEMENT_DOWN_WALL;    // for debug 
+              //debug_reg.d = b0001;
+            }
+          }
+            else {
+            //out of bounds 
+            maze_fsm.d = maze_fsm.IDLE;
+            //maze_fsm.d = maze_fsm.CHECKMOVEMENT_DOWN_WALL;    // for debug 
+           // debug = b1011;
+            }  
+        maze_fsm.CHECKMOVEMENT_LEFT:
+          alufn = b000001; // SUB 
+          xsel = b00000; // from a-port of regfile take the x_location
+          ysel = b00001; // constant one 
+          
+          regfile_read_address_a = b00000; // get data from x_location;
+          regfile_write_address = b00010; // the temp_1 register, containing new x 
+          //regfile_read_address_c = b00001; // get data from y_location 
+          //regfile_write_address_1 = b00011; // the temp_location_2 stores the original y_location
+          
+ 
+          we_regfile = 1;
+          //we_regfile_1 = 1;
+          
+          wdsel = b00; 
+          //debug = b1011;
+          maze_fsm.d = maze_fsm.CHECKMOVEMENT_LEFT_WALL;
+          // problem: why here both x and y changed 
+          //maze_fsm.d = maze_fsm.CHECKMOVEMENT_LEFT;     // for debug 
+          
+        maze_fsm.CHECKMOVEMENT_LEFT_WALL:
+          if (temp_location_1 > 0){
+              rom_address = y_location;   
+                                             
+              check_wall = rom_data[7-temp_location_1]; // which cell ? x_location stores the current x location 
+            //  debug_reg.d = check_wall;
+              if (check_wall == 1){ //no wall, update location 
+                  //update the xlocation 
+                  alufn = b011010; //A 
+                  regfile_write_address = b00000; // to x_loc 
+                  we_regfile = 1;
+                  xsel = b10;
+                  wdsel = b00;
+                  direct_data = temp_location_1; //the new x 
+                  maze_fsm.d = maze_fsm.IDLE;
+              //debug = b0110;
+              //maze_fsm.d = maze_fsm.CHECKMOVEMENT_LEFT_WALL;    // for debug
+                }
+            
+              else{ //theres wall 
+            
+              //stays the same 
+               maze_fsm.d = maze_fsm.IDLE;
+              //debug = b1100;
+              //maze_fsm.d = maze_fsm.CHECKMOVEMENT_LEFT_WALL;
+            }
+          }
+            else {
+            //out of bounds 
+            maze_fsm.d = maze_fsm.IDLE;
+           // debug = b1001;
+            //maze_fsm.d = maze_fsm.CHECKMOVEMENT_LEFT_WALL;   // for debug 
+            }          
+        maze_fsm.CHECKMOVEMENT_RIGHT:
+          alufn = b000000; // ADD
+          xsel = b00000; // from a-port of regfile take the x_location
+          ysel = b00001; // constant one 
+          
+          regfile_read_address_a = b00000; // get data from x_location;
+          regfile_write_address = b00010; // the temp_1 register, containing new x 
+          //regfile_read_address_a = b00001; // get data from the y_location 
+          //regfile_write_address = b00011;  // the temp_2 register containing the original y 
+          we_regfile = 1;
+          
+          wdsel = b00; 
+          //debug = b0011;
+          maze_fsm.d = maze_fsm.CHECKMOVEMENT_RIGHT_WALL;
+          
+        maze_fsm.CHECKMOVEMENT_RIGHT_WALL:
+          if (temp_location_1 > 0){
+              rom_address = y_location;
+                                               
+              check_wall = rom_data[7-temp_location_1]; // which cell ? x_location stores the current x location 
+              if (check_wall == 1){ //no wall, update location 
+                  //update the xlocation 
+                  alufn = b011010; //A 
+                  regfile_write_address = b00000; // to x_loc 
+                  we_regfile = 1;
+                  xsel = b10;
+                  wdsel = b00;
+                  direct_data = temp_location_1; //the new x 
+                  maze_fsm.d = maze_fsm.IDLE;
+                }
+            
+              else{ //theres wall 
+            
+              //stays the same 
+               maze_fsm.d = maze_fsm.IDLE;
+            }
+          }
+            else {
+            //out of bounds 
+            maze_fsm.d = maze_fsm.IDLE;
+            } 
+        maze_fsm.WIN:
+          win_signal = 1;
+          //timer_reg.d = 0;
+          maze_fsm.d = maze_fsm.START_TIMER;
+        
+        //maze_fsm.LOSE:
+          //lose_signal = 1;
+          //maze_fsm.d = maze_fsm.START_TIMER;        
+
+             
+        maze_fsm.IDLE:
+          if (up){
+            maze_fsm.d = maze_fsm.CHECKMOVEMENT_UP;
+          } 
+          else if (down){
+            maze_fsm.d = maze_fsm.CHECKMOVEMENT_DOWN;
+            } 
+          else if(left){
+            maze_fsm.d = maze_fsm.CHECKMOVEMENT_LEFT;
+            }
+          else if(right){
+            maze_fsm.d = maze_fsm.CHECKMOVEMENT_RIGHT;
+            }
+          else if(hint){
+          
+            }
+          else if(timer_decrease){
+           if (timer_reg.q > 0){
+              timer_reg.d = timer_reg.q - 1;
+              decctr_decrease = 1;
+            }
+            else{
+              //maze_fsm.d = maze_fsm.LOSE;
+              lose_signal =1;
+              
+            }
+          }
+          //debug = b0111; 
+          else if(x_location==7&&y_location==7){
+            maze_fsm.d = maze_fsm.WIN;
+          
+            }    
+      }
+      }
+  }
+}
+
