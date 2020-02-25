@@ -10,6 +10,6 @@ there are three levels to the maze and the maze is filled with a toxic gas, disr
 display less of the maze at each level).
 
 Lessons learnt through the project:
--How to 'think' like a machine
--How to display Software code into Hardware
--State Machines
+  -How to 'think' like a machine
+  -How to display Software code into Hardware
+  -State Machines
